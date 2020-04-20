@@ -182,7 +182,7 @@ def val(net, args):
                 line = str(x) + " " + str(y) + " " + str(w) + " " + str(h) + " " + confidence + " \n"
                 fd.write(line)
 
-        print('im_detect: {:d}/{:d} forward_pass_time: {:.4f}s misc: {:.4f}s'.format(i + 1, num_images, _t['forward_pass'].average_time, _t['misc'].average_time))
+        #print('im_detect: {:d}/{:d} forward_pass_time: {:.4f}s misc: {:.4f}s'.format(i + 1, num_images, _t['forward_pass'].average_time, _t['misc'].average_time))
 
         # save image
         if args.save_image:
