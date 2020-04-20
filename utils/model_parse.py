@@ -47,7 +47,7 @@ class mask_decorater:
         layer.weight.data.copy_(layer.ori_weight.data)
         layer.weight.data.mul_(layer.w_mask.data)
         
-        if bias_mask and hasattr(layer, 'bias'):
+        if bias_mask is not None and hasattr(layer, 'bias') and layer.bias is not None:
             layer.b_mask.data.copy_(bias_mask.data)
             layer.bias.data.copy_(layer.ori_bias.data)
             layer.bias.data.mul_(layer.b_mask.data)
