@@ -32,8 +32,9 @@ parser.add_argument('--nms_threshold', default=0.4, type=float, help='nms_thresh
 parser.add_argument('--keep_top_k', default=750, type=int, help='keep_top_k')
 parser.add_argument('-s', '--save_image', action="store_true", default=False, help='show detection results')
 parser.add_argument('--vis_thres', default=0.5, type=float, help='visualization_threshold')
-parser.add_argument('--analysis_start', default=0, help='Only analyze the layers start from')
-parser.add_argument('--analysis_end', default=None, help='The sensitivity analysis stops at this layer')
+parser.add_argument('--analysis_start', default=0, type=int, help='Only analyze the layers start from')
+parser.add_argument('--analysis_end', default=None, type=int, help='The sensitivity analysis stops at this layer')
+parser.add_argument('--ratio_step', default=0.05, type=float, help='Prune ratio change step')
 args = parser.parse_args()
 
 
@@ -239,7 +240,8 @@ if __name__ == '__main__':
         layer =  masks.target_layer[i]
         pruner = pruners[i]
         sense_re[layer.name]=[]
-        for ratio in np.arange(0.05, 1.0, 0.05):
+        for ratio in np.arange(args.ratio_step, 1.00001, args.ratio_step):
+            ratio = min(1.0, ratio)
             w_mask, b_mask = pruner.cal_mask_l1(ratio)
             masks.update_mask(layer, w_mask, b_mask)
             if os.path.exists('./widerface_evaluate/widerface_txt'):
@@ -249,5 +251,6 @@ if __name__ == '__main__':
             sense_re[layer.name].append((ratio, acc))
             print(sense_re)
     print(sense_re)
-    with open('sensitivity.json','w') as fp:
+    filename = 'sensitivity_%d_%d.json' % (args.analysis_start, args.analysis_end)
+    with open(filename,'w') as fp:
         json.dump(sense_re, fp)
