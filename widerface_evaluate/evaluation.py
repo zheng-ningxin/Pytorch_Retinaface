@@ -11,7 +11,7 @@ import pickle
 import argparse
 import numpy as np
 from scipy.io import loadmat
-from bbox import bbox_overlaps
+from .bbox import bbox_overlaps
 from IPython import embed
 
 
@@ -279,7 +279,7 @@ def evaluation(pred, gt_path, iou_thresh=0.5):
     print("Medium Val AP: {}".format(aps[1]))
     print("Hard   Val AP: {}".format(aps[2]))
     print("=================================================")
-
+    return aps
 
 if __name__ == '__main__':
 
