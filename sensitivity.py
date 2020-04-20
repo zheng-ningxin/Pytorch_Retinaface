@@ -14,6 +14,7 @@ from utils.timer import Timer
 from utils.model_parse import  mask_decorater
 from utils.filter_pruner import filter_pruner
 from widerface_evaluate.evaluation import evaluation
+import json
 import shutil
 
 
@@ -31,6 +32,8 @@ parser.add_argument('--nms_threshold', default=0.4, type=float, help='nms_thresh
 parser.add_argument('--keep_top_k', default=750, type=int, help='keep_top_k')
 parser.add_argument('-s', '--save_image', action="store_true", default=False, help='show detection results')
 parser.add_argument('--vis_thres', default=0.5, type=float, help='visualization_threshold')
+parser.add_argument('--analysis_start', default=0, help='Only analyze the layers start from')
+parser.add_argument('--analysis_end', default=None, help='The sensitivity analysis stops at this layer')
 args = parser.parse_args()
 
 
@@ -230,7 +233,9 @@ if __name__ == '__main__':
         layer = masks.target_layer[i]
         pruners.append(filter_pruner(layer))
     # sensitivity analysis
-    for i in range(masks.length):
+    if args.analysis_end is None:
+        args.analysis_end = masks.length
+    for i in range(args.analysis_start, args.analysis_end):
         layer =  masks.target_layer[i]
         pruner = pruners[i]
         sense_re[layer.name]=[]
@@ -244,3 +249,5 @@ if __name__ == '__main__':
             sense_re[layer.name].append((ratio, acc))
             print(sense_re)
     print(sense_re)
+    with open('sensitivity.json','w') as fp:
+        json.dump(sense_re, fp)
