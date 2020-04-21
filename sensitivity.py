@@ -233,6 +233,7 @@ if __name__ == '__main__':
     for i in range(masks.length):
         layer = masks.target_layer[i]
         pruners.append(filter_pruner(layer))
+    print('The number of target layers %d' % masks.length)
     # sensitivity analysis
     if args.analysis_end is None:
         args.analysis_end = masks.length
@@ -242,6 +243,7 @@ if __name__ == '__main__':
         sense_re[layer.name]=[]
         for ratio in np.arange(args.ratio_step, 1.00001, args.ratio_step):
             ratio = min(1.0, ratio)
+            ratio = np.round(ratio, 2)
             w_mask, b_mask = pruner.cal_mask_l1(ratio)
             masks.update_mask(layer, w_mask, b_mask)
             if os.path.exists('./widerface_evaluate/widerface_txt'):
