@@ -253,6 +253,6 @@ if __name__ == '__main__':
             sense_re[layer.name].append((ratio, acc))
             print(sense_re)
     print(sense_re)
-    filename = 'sensitivity_%d_%d.json' % (args.analysis_start, args.analysis_end)
+    filename = '%s_sensitivity_%d_%d.json' % (args.network, args.analysis_start, args.analysis_end)
     with open(filename,'w') as fp:
         json.dump(sense_re, fp)
