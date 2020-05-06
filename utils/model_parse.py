@@ -19,7 +19,7 @@ class model_parser:
                 if isinstance(sub_model, op_type):
                     sub_model.name = name
                     self.target_layer.append(sub_model)
-                    print(name, sub_model)
+                    # print(name, sub_model)
         return self.target_layer
 
 class mask_decorater:
