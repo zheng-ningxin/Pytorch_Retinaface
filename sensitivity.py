@@ -38,10 +38,10 @@ parser.add_argument('--ratio_step', default=0.05, type=float, help='Prune ratio 
 parser.add_argument('--weight_decay', default=5e-4, type=float, help='Weight decay for SGD')
 parser.add_argument('--gamma', default=0.1, type=float, help='Gamma update for SGD')
 parser.add_argument('--num_workers', default=4, type=int, help='Number of workers used in dataloading')
-parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float, help='initial learning rate')
+parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float, help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
 parser.add_argument('--training_dataset', default='./data/widerface/train/label.txt', help='Training dataset directory')
-
+parser.add_argument('--batch_size', default=6, type=int, help='batch_size for finetune')
 args = parser.parse_args()
 
 
@@ -240,7 +240,7 @@ num_classes = 2
 img_dim = cfg['image_size']
 num_gpu = cfg['ngpu']
 #batch_size = cfg['batch_size']
-batch_size = 6 # we use single gpu to train
+batch_size = args.batch_size # we use single gpu to train
 max_epoch = 1
 gpu_train = cfg['gpu_train']
 num_workers = args.num_workers
