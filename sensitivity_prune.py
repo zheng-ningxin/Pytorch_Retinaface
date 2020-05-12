@@ -200,7 +200,7 @@ def val(net):
                     line = str(x) + " " + str(y) + " " + str(w) + " " + str(h) + " " + confidence + " \n"
                     fd.write(line)
 
-            print('im_detect: {:d}/{:d} forward_pass_time: {:.4f}s misc: {:.4f}s'.format(i + 1, num_images, _t['forward_pass'].average_time, _t['misc'].average_time))
+            # print('im_detect: {:d}/{:d} forward_pass_time: {:.4f}s misc: {:.4f}s'.format(i + 1, num_images, _t['forward_pass'].average_time, _t['misc'].average_time))
 
             # save image
             if args.save_image:
@@ -252,7 +252,7 @@ img_dim = cfg['image_size']
 num_gpu = cfg['ngpu']
 #batch_size = cfg['batch_size']
 batch_size = args.batch_size # we use single gpu to train
-max_epoch = 2
+max_epoch = 5
 gpu_train = cfg['gpu_train']
 num_workers = args.num_workers
 momentum = args.momentum
@@ -334,9 +334,10 @@ def train(net):
         load_t1 = time.time()
         batch_time = load_t1 - load_t0
         eta = int(batch_time * (max_iter - iteration))
-        print('Epoch:{}/{} || Epochiter: {}/{} || Iter: {}/{} || Loc: {:.4f} Cla: {:.4f} Landm: {:.4f} || LR: {:.8f} || Batchtime: {:.4f} s || ETA: {}'
-              .format(epoch, max_epoch, (iteration % epoch_size) + 1,
-              epoch_size, iteration + 1, max_iter, loss_l.item(), loss_c.item(), loss_landm.item(), lr, batch_time, str(datetime.timedelta(seconds=eta))))
+        if iteration % epoch_size == 1:
+            print('Epoch:{}/{} || Epochiter: {}/{} || Iter: {}/{} || Loc: {:.4f} Cla: {:.4f} Landm: {:.4f} || LR: {:.8f} || Batchtime: {:.4f} s || ETA: {}'
+                .format(epoch, max_epoch, (iteration % epoch_size) + 1,
+                epoch_size, iteration + 1, max_iter, loss_l.item(), loss_c.item(), loss_landm.item(), lr, batch_time, str(datetime.timedelta(seconds=eta))))
 
     print('training end')
     #sys.exit(1)
