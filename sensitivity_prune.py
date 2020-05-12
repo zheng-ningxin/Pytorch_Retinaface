@@ -45,6 +45,7 @@ parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float, help='i
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
 parser.add_argument('--training_dataset', default='./data/widerface/train/label.txt', help='Training dataset directory')
 parser.add_argument('--batch_size', default=6, type=int, help='batch_size for finetune')
+parser.add_argument('--iter', default=1, help='maximum iteration of the sensitivity pruner')
 args = parser.parse_args()
 
 
@@ -352,7 +353,7 @@ if __name__ == '__main__':
     device = torch.device("cpu" if args.cpu else "cuda")
     net = net.to(device)
     pruner = SensitivityPruner(net, val, train, 'mobile025_sensitivity.json')
-    pruner.compress(0.5, MAX_ITERATION=1)
-    pruner.export('./mobile025_sensitivity_prune.pth', './mobile012_pruner.json')
+    pruner.compress(0.5, MAX_ITERATION=args.iter)
+    pruner.export('./mobile025_sensitivity_prune_iter_%d.pth' % args.iter, './mobile012_pruner_iter_%d.json' % args.iter)
     
     
