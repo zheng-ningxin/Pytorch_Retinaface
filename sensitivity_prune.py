@@ -45,7 +45,7 @@ parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float, help='i
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
 parser.add_argument('--training_dataset', default='./data/widerface/train/label.txt', help='Training dataset directory')
 parser.add_argument('--batch_size', default=6, type=int, help='batch_size for finetune')
-parser.add_argument('--iter', default=1, help='maximum iteration of the sensitivity pruner')
+parser.add_argument('--iter', type=int, default=1, help='maximum iteration of the sensitivity pruner')
 args = parser.parse_args()
 
 
