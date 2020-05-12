@@ -352,7 +352,7 @@ if __name__ == '__main__':
     device = torch.device("cpu" if args.cpu else "cuda")
     net = net.to(device)
     pruner = SensitivityPruner(net, val, train, 'mobile025_sensitivity.json')
-    pruner.compress(0.5, 1)
+    pruner.compress(0.5, MAX_ITERATION=1)
     pruner.export('./mobile025_sensitivity_prune.pth', './mobile012_pruner.json')
     
     
