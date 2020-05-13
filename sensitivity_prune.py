@@ -79,6 +79,8 @@ parser.add_argument('--target_ratio', type=float, default=0.5,
                     help='Target ratio of the remained weights compared to the original model')
 parser.add_argument('--maxiter', type=int, default=None,
                     help='max iteration of the sentivity pruning')
+parser.add_argument('--finetune_epoch', type=int, default=1,
+                    help='Finetune Epoch')
 parser.add_argument('--ratio_step', type=float, default=0.1,
                     help='the amount of the pruned weight in each prune iteration')
 parser.add_argument('--threshold', type=float, default=0.05,
@@ -291,7 +293,7 @@ img_dim = cfg['image_size']
 num_gpu = cfg['ngpu']
 #batch_size = cfg['batch_size']
 batch_size = args.batch_size  # we use single gpu to train
-max_epoch = 5
+max_epoch = args.finetune_epoch
 gpu_train = cfg['gpu_train']
 num_workers = args.num_workers
 momentum = args.momentum
