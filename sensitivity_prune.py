@@ -1,4 +1,12 @@
 from __future__ import print_function
+import sys
+import datetime
+import time
+import math
+from layers.modules import MultiBoxLoss
+from data import WiderFaceDetection, detection_collate, preproc, cfg_mnet, cfg_re50
+import torch.utils.data as data
+import torch.optim as optim
 import os
 import argparse
 import torch
@@ -11,7 +19,7 @@ import cv2
 from models.retinaface import RetinaFace
 from utils.box_utils import decode, decode_landm
 from utils.timer import Timer
-from utils.model_parse import  mask_decorater
+from utils.model_parse import mask_decorater
 from utils.filter_pruner import filter_pruner
 from widerface_evaluate.evaluation import evaluation
 import json
@@ -24,30 +32,60 @@ from sensitivity.sensitivity_pruner import SensitivityPruner
 parser = argparse.ArgumentParser(description='Retinaface')
 parser.add_argument('-m', '--trained_model', default='./weights/Resnet50_Final.pth',
                     type=str, help='Trained state_dict file path to open')
-parser.add_argument('--network', default='resnet50', help='Backbone network mobile0.25 or resnet50')
-parser.add_argument('--origin_size', default=True, type=str, help='Whether use origin image size to evaluate')
-parser.add_argument('--save_folder', default='./widerface_evaluate/widerface_txt/', type=str, help='Dir to save txt results')
-parser.add_argument('--cpu', action="store_true", default=False, help='Use cpu inference')
-parser.add_argument('--dataset_folder', default='./data/widerface/val/images/', type=str, help='dataset path')
-parser.add_argument('--confidence_threshold', default=0.02, type=float, help='confidence_threshold')
+parser.add_argument('--network', default='resnet50',
+                    help='Backbone network mobile0.25 or resnet50')
+parser.add_argument('--origin_size', default=True, type=str,
+                    help='Whether use origin image size to evaluate')
+parser.add_argument('--save_folder', default='./widerface_evaluate/widerface_txt/',
+                    type=str, help='Dir to save txt results')
+parser.add_argument('--cpu', action="store_true",
+                    default=False, help='Use cpu inference')
+parser.add_argument('--dataset_folder',
+                    default='./data/widerface/val/images/', type=str, help='dataset path')
+parser.add_argument('--confidence_threshold', default=0.02,
+                    type=float, help='confidence_threshold')
 parser.add_argument('--top_k', default=5000, type=int, help='top_k')
-parser.add_argument('--nms_threshold', default=0.4, type=float, help='nms_threshold')
+parser.add_argument('--nms_threshold', default=0.4,
+                    type=float, help='nms_threshold')
 parser.add_argument('--keep_top_k', default=750, type=int, help='keep_top_k')
-parser.add_argument('-s', '--save_image', action="store_true", default=False, help='show detection results')
-parser.add_argument('--vis_thres', default=0.5, type=float, help='visualization_threshold')
-parser.add_argument('--analysis_start', default=0, type=int, help='Only analyze the layers start from')
-parser.add_argument('--analysis_end', default=None, type=int, help='The sensitivity analysis stops at this layer')
-parser.add_argument('--ratio_step', default=0.05, type=float, help='Prune ratio change step')
-parser.add_argument('--weight_decay', default=5e-4, type=float, help='Weight decay for SGD')
-parser.add_argument('--gamma', default=0.1, type=float, help='Gamma update for SGD')
-parser.add_argument('--num_workers', default=4, type=int, help='Number of workers used in dataloading')
-parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float, help='initial learning rate')
+parser.add_argument('-s', '--save_image', action="store_true",
+                    default=False, help='show detection results')
+parser.add_argument('--vis_thres', default=0.5, type=float,
+                    help='visualization_threshold')
+parser.add_argument('--analysis_start', default=0, type=int,
+                    help='Only analyze the layers start from')
+parser.add_argument('--analysis_end', default=None, type=int,
+                    help='The sensitivity analysis stops at this layer')
+parser.add_argument('--weight_decay', default=5e-4,
+                    type=float, help='Weight decay for SGD')
+parser.add_argument('--gamma', default=0.1, type=float,
+                    help='Gamma update for SGD')
+parser.add_argument('--num_workers', default=4, type=int,
+                    help='Number of workers used in dataloading')
+parser.add_argument('--lr', '--learning-rate', default=1e-4,
+                    type=float, help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
-parser.add_argument('--training_dataset', default='./data/widerface/train/label.txt', help='Training dataset directory')
-parser.add_argument('--batch_size', default=6, type=int, help='batch_size for finetune')
-parser.add_argument('--iter', type=int, default=1, help='maximum iteration of the sensitivity pruner')
-args = parser.parse_args()
+parser.add_argument('--training_dataset',
+                    default='./data/widerface/train/label.txt', help='Training dataset directory')
+parser.add_argument('--batch_size', default=6, type=int,
+                    help='batch_size for finetune')
+parser.add_argument('--iter', type=int, default=1,
+                    help='maximum iteration of the sensitivity pruner')
 
+parser.add_argument('--resume', default='mobile025_sensitivity.json',
+                    help='resume from the sensitivity results')
+parser.add_argument('--outdir', help='save the result in this directory')
+parser.add_argument('--target_ratio', type=float, default=0.5,
+                    help='Target ratio of the remained weights compared to the original model')
+parser.add_argument('--maxiter', type=int, default=None,
+                    help='max iteration of the sentivity pruning')
+parser.add_argument('--ratio_step', type=float, default=0.1,
+                    help='the amount of the pruned weight in each prune iteration')
+parser.add_argument('--threshold', type=float, default=0.05,
+                        help='The accuracy drop threshold during the sensitivity analysis')
+
+
+args = parser.parse_args()
 
 
 def check_keys(model, pretrained_state_dict):
@@ -66,19 +104,22 @@ def check_keys(model, pretrained_state_dict):
 def remove_prefix(state_dict, prefix):
     ''' Old style model is stored with all names of parameters sharing common prefix 'module.' '''
     print('remove prefix \'{}\''.format(prefix))
-    f = lambda x: x.split(prefix, 1)[-1] if x.startswith(prefix) else x
+    def f(x): return x.split(prefix, 1)[-1] if x.startswith(prefix) else x
     return {f(key): value for key, value in state_dict.items()}
 
 
 def load_model(model, pretrained_path, load_to_cpu):
     print('Loading pretrained model from {}'.format(pretrained_path))
     if load_to_cpu:
-        pretrained_dict = torch.load(pretrained_path, map_location=lambda storage, loc: storage)
+        pretrained_dict = torch.load(
+            pretrained_path, map_location=lambda storage, loc: storage)
     else:
         device = torch.cuda.current_device()
-        pretrained_dict = torch.load(pretrained_path, map_location=lambda storage, loc: storage.cuda(device))
+        pretrained_dict = torch.load(
+            pretrained_path, map_location=lambda storage, loc: storage.cuda(device))
     if "state_dict" in pretrained_dict.keys():
-        pretrained_dict = remove_prefix(pretrained_dict['state_dict'], 'module.')
+        pretrained_dict = remove_prefix(
+            pretrained_dict['state_dict'], 'module.')
     else:
         pretrained_dict = remove_prefix(pretrained_dict, 'module.')
     check_keys(model, pretrained_dict)
@@ -86,9 +127,8 @@ def load_model(model, pretrained_path, load_to_cpu):
     return model
 
 
-
 def val(net):
-    # remove the last evaluation result 
+    # remove the last evaluation result
     if os.path.exists('./widerface_evaluate/widerface_txt'):
         shutil.rmtree('./widerface_evaluate/widerface_txt')
     # testing dataset
@@ -105,7 +145,7 @@ def val(net):
     # testing begin
     with torch.no_grad():
         for i, img_name in enumerate(test_dataset):
-            
+
             image_path = testset_folder + img_name
             img_raw = cv2.imread(image_path, cv2.IMREAD_COLOR)
             img = np.float32(img_raw)
@@ -124,9 +164,11 @@ def val(net):
                 resize = 1
 
             if resize != 1:
-                img = cv2.resize(img, None, None, fx=resize, fy=resize, interpolation=cv2.INTER_LINEAR)
+                img = cv2.resize(img, None, None, fx=resize,
+                                 fy=resize, interpolation=cv2.INTER_LINEAR)
             im_height, im_width, _ = img.shape
-            scale = torch.Tensor([img.shape[1], img.shape[0], img.shape[1], img.shape[0]])
+            scale = torch.Tensor(
+                [img.shape[1], img.shape[0], img.shape[1], img.shape[0]])
             img -= (104, 117, 123)
             img = img.transpose(2, 0, 1)
             img = torch.from_numpy(img).unsqueeze(0)
@@ -145,10 +187,11 @@ def val(net):
             boxes = boxes * scale / resize
             boxes = boxes.cpu().numpy()
             scores = conf.squeeze(0).data.cpu().numpy()[:, 1]
-            landms = decode_landm(landms.data.squeeze(0), prior_data, cfg['variance'])
+            landms = decode_landm(landms.data.squeeze(0),
+                                  prior_data, cfg['variance'])
             scale1 = torch.Tensor([img.shape[3], img.shape[2], img.shape[3], img.shape[2],
-                                img.shape[3], img.shape[2], img.shape[3], img.shape[2],
-                                img.shape[3], img.shape[2]])
+                                   img.shape[3], img.shape[2], img.shape[3], img.shape[2],
+                                   img.shape[3], img.shape[2]])
             scale1 = scale1.to(device)
             landms = landms * scale1 / resize
             landms = landms.cpu().numpy()
@@ -167,7 +210,8 @@ def val(net):
             scores = scores[order]
 
             # do NMS
-            dets = np.hstack((boxes, scores[:, np.newaxis])).astype(np.float32, copy=False)
+            dets = np.hstack((boxes, scores[:, np.newaxis])).astype(
+                np.float32, copy=False)
             keep = py_cpu_nms(dets, args.nms_threshold)
             # keep = nms(dets, args.nms_threshold,force_cpu=args.cpu)
             dets = dets[keep, :]
@@ -197,7 +241,8 @@ def val(net):
                     w = int(box[2]) - int(box[0])
                     h = int(box[3]) - int(box[1])
                     confidence = str(box[4])
-                    line = str(x) + " " + str(y) + " " + str(w) + " " + str(h) + " " + confidence + " \n"
+                    line = str(x) + " " + str(y) + " " + str(w) + \
+                        " " + str(h) + " " + confidence + " \n"
                     fd.write(line)
 
             # print('im_detect: {:d}/{:d} forward_pass_time: {:.4f}s misc: {:.4f}s'.format(i + 1, num_images, _t['forward_pass'].average_time, _t['misc'].average_time))
@@ -209,7 +254,8 @@ def val(net):
                         continue
                     text = "{:.4f}".format(b[4])
                     b = list(map(int, b))
-                    cv2.rectangle(img_raw, (b[0], b[1]), (b[2], b[3]), (0, 0, 255), 2)
+                    cv2.rectangle(img_raw, (b[0], b[1]),
+                                  (b[2], b[3]), (0, 0, 255), 2)
                     cx = b[0]
                     cy = b[1] + 12
                     cv2.putText(img_raw, text, (cx, cy),
@@ -226,19 +272,12 @@ def val(net):
                     os.makedirs("./results/")
                 name = "./results/" + str(i) + ".jpg"
                 cv2.imwrite(name, img_raw)
-    acc = evaluation('./widerface_evaluate/widerface_txt','./widerface_evaluate/ground_truth/')
+    acc = evaluation('./widerface_evaluate/widerface_txt',
+                     './widerface_evaluate/ground_truth/')
     print(acc)
     return sum(acc)/3.0
 
-import sys
-import torch.optim as optim
-import torch.utils.data as data
-from data import WiderFaceDetection, detection_collate, preproc, cfg_mnet, cfg_re50
-from layers.modules import MultiBoxLoss
-from layers.functions.prior_box import PriorBox
-import math
-import time
-import datetime
+
 if not os.path.exists(args.save_folder):
     os.mkdir(args.save_folder)
 cfg = None
@@ -246,12 +285,12 @@ if args.network == "mobile0.25":
     cfg = cfg_mnet
 elif args.network == "resnet50":
     cfg = cfg_re50
-rgb_mean = (104, 117, 123) # bgr order
+rgb_mean = (104, 117, 123)  # bgr order
 num_classes = 2
 img_dim = cfg['image_size']
 num_gpu = cfg['ngpu']
 #batch_size = cfg['batch_size']
-batch_size = args.batch_size # we use single gpu to train
+batch_size = args.batch_size  # we use single gpu to train
 max_epoch = 5
 gpu_train = cfg['gpu_train']
 num_workers = args.num_workers
@@ -262,6 +301,7 @@ gamma = args.gamma
 training_dataset = args.training_dataset
 save_folder = args.save_folder
 priorbox = PriorBox(cfg, image_size=(img_dim, img_dim))
+
 
 def adjust_learning_rate(optimizer, gamma, epoch, step_index, iteration, epoch_size):
     """Sets the learning rate
@@ -277,17 +317,19 @@ def adjust_learning_rate(optimizer, gamma, epoch, step_index, iteration, epoch_s
         param_group['lr'] = lr
     return lr
 
+
 def train(net):
     torch.set_grad_enabled(True)
-    
-    optimizer = optim.SGD(net.parameters(), lr=initial_lr, momentum=momentum, weight_decay=weight_decay)
+
+    optimizer = optim.SGD(net.parameters(), lr=initial_lr,
+                          momentum=momentum, weight_decay=weight_decay)
     criterion = MultiBoxLoss(num_classes, 0.35, True, 0, True, 7, 0.35, False)
     with torch.no_grad():
         priors = priorbox.forward()
         priors = priors.cuda()
     net.train()
     epoch = 0
-    dataset = WiderFaceDetection( training_dataset,preproc(img_dim, rgb_mean))
+    dataset = WiderFaceDetection(training_dataset, preproc(img_dim, rgb_mean))
 
     epoch_size = math.ceil(len(dataset) / batch_size)
     max_iter = max_epoch * epoch_size
@@ -295,27 +337,30 @@ def train(net):
     stepvalues = (cfg['decay1'] * epoch_size, cfg['decay2'] * epoch_size)
     step_index = 0
     start_iter = 0
-    
+
     for iteration in range(start_iter, max_iter):
         #print('Iteration:', iteration)
         if iteration % epoch_size == 0:
             # create batch iterator
-            batch_iterator = iter(data.DataLoader(dataset, batch_size, shuffle=True, num_workers=num_workers, collate_fn=detection_collate))
+            batch_iterator = iter(data.DataLoader(
+                dataset, batch_size, shuffle=True, num_workers=num_workers, collate_fn=detection_collate))
             if (epoch % 10 == 0 and epoch > 0) or (epoch % 5 == 0 and epoch > cfg['decay1']):
-                torch.save(net.state_dict(), save_folder + cfg['name']+ '_epoch_' + str(epoch) + '.pth')
+                torch.save(net.state_dict(), save_folder +
+                           cfg['name'] + '_epoch_' + str(epoch) + '.pth')
             epoch += 1
 
         load_t0 = time.time()
         if iteration in stepvalues:
             step_index += 1
-        lr = adjust_learning_rate(optimizer, gamma, epoch, step_index, iteration, epoch_size)
+        lr = adjust_learning_rate(
+            optimizer, gamma, epoch, step_index, iteration, epoch_size)
 
         # load train data
         images, targets = next(batch_iterator)
         images = images.cuda()
         targets = [anno.cuda() for anno in targets]
-        #print(torch.cuda.memory_stats(device))
-        #print(images.size())
+        # print(torch.cuda.memory_stats(device))
+        # print(images.size())
         # forward
         out = net(images)
 
@@ -336,25 +381,31 @@ def train(net):
         eta = int(batch_time * (max_iter - iteration))
         if iteration % epoch_size == 1:
             print('Epoch:{}/{} || Epochiter: {}/{} || Iter: {}/{} || Loc: {:.4f} Cla: {:.4f} Landm: {:.4f} || LR: {:.8f} || Batchtime: {:.4f} s || ETA: {}'
-                .format(epoch, max_epoch, (iteration % epoch_size) + 1,
-                epoch_size, iteration + 1, max_iter, loss_l.item(), loss_c.item(), loss_landm.item(), lr, batch_time, str(datetime.timedelta(seconds=eta))))
+                  .format(epoch, max_epoch, (iteration % epoch_size) + 1,
+                          epoch_size, iteration + 1, max_iter, loss_l.item(), loss_c.item(), loss_landm.item(), lr, batch_time, str(datetime.timedelta(seconds=eta))))
 
     print('training end')
-    #sys.exit(1)
+    # sys.exit(1)
+
 
 if __name__ == '__main__':
-    #torch.set_grad_enabled(False)
+    
+
+    # torch.set_grad_enabled(False)
     # net and model
     net = RetinaFace(cfg=cfg)
     net = load_model(net, args.trained_model, args.cpu)
-    
+
     print('Finished loading model!')
-    #print(net)
+    # print(net)
     #cudnn.benchmark = True
     device = torch.device("cpu" if args.cpu else "cuda")
     net = net.to(device)
-    pruner = SensitivityPruner(net, val, train, 'mobile025_sensitivity.json')
-    pruner.compress(0.5, MAX_ITERATION=args.iter)
-    pruner.export('./mobile025_sensitivity_prune_iter_%d.pth' % args.iter, './mobile012_pruner_iter_%d.json' % args.iter)
-    
-    
+    pruner = SensitivityPruner(net, val, train, resume_frome=args.resume)
+    pruner.compress(args.target_ratio, ratio_step=args.ratio_step, MAX_ITERATION=args.iter)
+    model_file = '%s_sen_prune_%.2f_step_%.2f_iter_%d.pth' % (args.network, args.target_ratio, args.ratio_step, args.iter)
+    pruner_cfg = '%s_prune_cfg_%.2f_step_%.2f_iter_%d.json' % (args.network, args.target_ratio, args.ratio_step, args.iter)
+    model_file = os.path.join(args.outdir, model_file)
+    pruner_cfg = os.path.join(args.outdir, pruner_cfg)
+    os.makedirs(args.outdir, exist_ok=True)
+    pruner.export(model_file, pruner_cfg)
