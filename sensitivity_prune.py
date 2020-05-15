@@ -405,7 +405,7 @@ if __name__ == '__main__':
     device = torch.device("cpu" if args.cpu else "cuda")
     net = net.to(device)
     pruner = SensitivityPruner(net, val, train, resume_frome=args.resume)
-    pruner.compress(args.target_ratio, threshold=args.threshold, ratio_step=args.ratio_step, MAX_ITERATION=args.iter)
+    pruner.compress(args.target_ratio, threshold=args.threshold, ratio_step=args.ratio_step, MAX_ITERATION=args.iter, checkpoint_dir=args.outdir)
     model_file = '%s_sen_prune_%.2f_step_%.2f_iter_%d.pth' % (args.network, args.target_ratio, args.ratio_step, args.iter)
     pruner_cfg = '%s_prune_cfg_%.2f_step_%.2f_iter_%d.json' % (args.network, args.target_ratio, args.ratio_step, args.iter)
     model_file = os.path.join(args.outdir, model_file)
