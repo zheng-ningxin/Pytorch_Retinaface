@@ -385,7 +385,7 @@ def train(net):
         if iteration % epoch_size == 0:
             print('Epoch:{}/{} || Epochiter: {}/{} || Iter: {}/{} || Loc: {:.4f} Cla: {:.4f} Landm: {:.4f} || LR: {:.8f} || Batchtime: {:.4f} s || ETA: {}'
                   .format(epoch, max_epoch, (iteration % epoch_size) + 1,
-                          epoch_size, iteration + 1, max_iter, loss_l.item(), loss_c.item(), loss_landm.item(), lr_scheduler.get_lr(), batch_time, str(datetime.timedelta(seconds=eta))))
+                          epoch_size, iteration + 1, max_iter, loss_l.item(), loss_c.item(), loss_landm.item(), lr_scheduler.get_lr()[0], batch_time, str(datetime.timedelta(seconds=eta))))
             lr_scheduler.step()
     print('training end')
     # sys.exit(1)
