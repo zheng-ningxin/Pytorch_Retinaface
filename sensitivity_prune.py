@@ -85,7 +85,7 @@ parser.add_argument('--ratio_step', type=float, default=0.1,
                     help='the amount of the pruned weight in each prune iteration')
 parser.add_argument('--threshold', type=float, default=0.05,
                         help='The accuracy drop threshold during the sensitivity analysis')
-
+parser.add_argument('--lr_decay', type=float, default=0.5, help='lr_decay rate')
 
 args = parser.parse_args()
 
@@ -325,7 +325,7 @@ def train(net):
 
     optimizer = optim.SGD(net.parameters(), lr=initial_lr,
                           momentum=momentum, weight_decay=weight_decay)
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1, 0.5)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1, args.lr_decay)
     criterion = MultiBoxLoss(num_classes, 0.35, True, 0, True, 7, 0.35, False)
     with torch.no_grad():
         priors = priorbox.forward()
