@@ -26,8 +26,8 @@ import json
 import shutil
 
 #import sensitivity.sensitivity_pruner as sensitivity_pruner
-from sensitivity.sensitivity_pruner import SensitivityPruner
-
+# from sensitivity.sensitivity_pruner import SensitivityPruner
+from nni.compression.torch.sensitivity_pruner import SensitivityPruner
 
 parser = argparse.ArgumentParser(description='Retinaface')
 parser.add_argument('-m', '--trained_model', default='./weights/Resnet50_Final.pth',
@@ -60,9 +60,9 @@ parser.add_argument('--weight_decay', default=5e-4,
                     type=float, help='Weight decay for SGD')
 parser.add_argument('--gamma', default=0.1, type=float,
                     help='Gamma update for SGD')
-parser.add_argument('--num_workers', default=4, type=int,
+parser.add_argument('--num_workers', default=24, type=int,
                     help='Number of workers used in dataloading')
-parser.add_argument('--lr', '--learning-rate', default=1e-4,
+parser.add_argument('--lr', '--learning-rate', default=1e-3,
                     type=float, help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
 parser.add_argument('--training_dataset',
@@ -72,8 +72,13 @@ parser.add_argument('--batch_size', default=6, type=int,
 parser.add_argument('--iter', type=int, default=1,
                     help='maximum iteration of the sensitivity pruner')
 
-parser.add_argument('--resume', default='mobile025_sensitivity.json',
+parser.add_argument('--sensitivity', default=None,
                     help='resume from the sensitivity results')
+parser.add_argument('--checkpoint', default=None,
+                    help='resume the previous pruned weights')
+parser.add_argument('--pruner_cfg', default=None,
+                    help='resume the previous pruner config')
+
 parser.add_argument('--outdir', help='save the result in this directory')
 parser.add_argument('--target_ratio', type=float, default=0.5,
                     help='Target ratio of the remained weights compared to the original model')
@@ -84,8 +89,9 @@ parser.add_argument('--finetune_epoch', type=int, default=1,
 parser.add_argument('--ratio_step', type=float, default=0.1,
                     help='the amount of the pruned weight in each prune iteration')
 parser.add_argument('--threshold', type=float, default=0.05,
-                        help='The accuracy drop threshold during the sensitivity analysis')
-parser.add_argument('--lr_decay', type=float, default=0.5, help='lr_decay rate')
+                    help='The accuracy drop threshold during the sensitivity analysis')
+parser.add_argument('--lr_decay', type=float,
+                    default=0.5, help='lr_decay rate')
 
 args = parser.parse_args()
 
@@ -392,7 +398,6 @@ def train(net):
 
 
 if __name__ == '__main__':
-    
 
     # torch.set_grad_enabled(False)
     # net and model
@@ -404,11 +409,22 @@ if __name__ == '__main__':
     #cudnn.benchmark = True
     device = torch.device("cpu" if args.cpu else "cuda")
     net = net.to(device)
-    pruner = SensitivityPruner(net, val, train, resume_frome=args.resume)
-    pruner.compress(args.target_ratio, threshold=args.threshold, ratio_step=args.ratio_step, MAX_ITERATION=args.iter, checkpoint_dir=args.outdir)
-    model_file = '%s_sen_prune_%.2f_step_%.2f_iter_%d.pth' % (args.network, args.target_ratio, args.ratio_step, args.iter)
-    pruner_cfg = '%s_prune_cfg_%.2f_step_%.2f_iter_%d.json' % (args.network, args.target_ratio, args.ratio_step, args.iter)
+    pruner = SensitivityPruner(net, val, train)
+    if args.checkpoint and args.pruner_cfg:
+        pruner.resume(args.checkpoint, args.pruner_cfg)
+    func_args = [net]
+    pruner.compress(args.target_ratio, val_args=func_args, finetune_args=func_args, threshold=args.threshold, ratio_step=args.ratio_step,
+                    MAX_ITERATION=args.iter, checkpoint_dir=args.outdir, resume_sensitivity=args.sensitivity)
+
+    model_file = '%s_sen_prune_%.2f_step_%.2f_iter_%d.pth' % (
+        args.network, args.target_ratio, args.ratio_step, args.iter)
+    pruner_cfg = '%s_prune_cfg_%.2f_step_%.2f_iter_%d.json' % (
+        args.network, args.target_ratio, args.ratio_step, args.iter)
     model_file = os.path.join(args.outdir, model_file)
     pruner_cfg = os.path.join(args.outdir, pruner_cfg)
     os.makedirs(args.outdir, exist_ok=True)
     pruner.export(model_file, pruner_cfg)
+    # also save the sensitivity_result
+    sensitivity_file = os.path.join(args.outdir, 'sensitivity.json')
+    with open(sensitivity_file, 'w') as jf:
+        json.dump(pruner.sensitivities, jf)

@@ -131,7 +131,8 @@ if __name__ == '__main__':
     device = torch.device("cpu" if args.cpu else "cuda")
     net = net.to(device)
 
-    data = torch.rand(1, 3, 560, 1024)
+    # data = torch.rand(1, 3, 560, 1024)
+    data = torch.rand(1,3, 640, 640)
     data = data.to(device)
     gf = VisualGraph(net,data)
     FLOPS = load_flops(args.network)
