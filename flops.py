@@ -72,27 +72,30 @@ elif args.network == "resnet50":
 from analysis_utils.topology.torch.shape_dependency import ChannelDependency
 from analysis_utils.topology.torch.graph_from_trace import VisualGraph
 import re
-def load_flops(name):
-    fname = '%s.stat' %name
+
+def forward_hook(module, inputs, output):
+    if hasattr(module, 'flops'):
+        return
+    input=inputs[0]
+    g = module.groups
+    n, c, _, _ = input.size()
+    _, _, h,w= output.size()
+    k1, k2 = module.kernel_size
+    flops = (1*c*k1*k2 ) * h * w * module.out_channels / g
+    module.flops = flops
+
+def get_flops(net, data):
     Flops = {}
-    with open(fname, 'r') as f:
-        lines = f.readlines()
-        Flops_sum = 0
-        for line in lines:
-            line = re.split(' ', line)
-            line = list(filter(lambda x: len(x)>0, line))
-            if len(line) < 2:
-                continue
-            print(line)
-            name = line[0]
-            
-            flops = line[1]
-            flops = float(flops)
-            # Flops.append((name, flops))
-            Flops[name] = flops
-            Flops_sum += flops
-        # print(Flops)
-    print('Total Flops: ' , Flops_sum)
+    total_flops = 0
+    for name, layer in net.named_modules():
+        if isinstance(layer, torch.nn.Conv2d):
+            layer.register_forward_hook(forward_hook)
+    net(data)
+    for name, layer in net.named_modules():
+        if isinstance(layer, torch.nn.Conv2d):
+            total_flops += layer.flops
+            Flops[name] = layer.flops
+    print('TOTAL FLOPS', total_flops)
     return Flops
 
 def load_sparsity(filepath):
@@ -135,7 +138,7 @@ if __name__ == '__main__':
     data = torch.rand(1,3, 640, 640)
     data = data.to(device)
     gf = VisualGraph(net,data)
-    FLOPS = load_flops(args.network)
+    FLOPS = get_flops(net, data)
     pruned_flops = 0.0
     visited = set()
     in_prune_ratio = {}
