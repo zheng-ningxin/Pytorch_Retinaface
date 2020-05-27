@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from collections import OrderedDict
 
 from models.net import MobileNetV1 as MobileNetV1
+from models.net import SqueezeNetV1 as SqueezeNet
 from models.net import FPN as FPN
 from models.net import SSH as SSH
 
@@ -56,25 +57,28 @@ class RetinaFace(nn.Module):
         backbone = None
         if cfg['name'] == 'mobilenet0.25':
             backbone = MobileNetV1()
+            #backbone = SqueezeNet()
             if cfg['pretrain']:
-                checkpoint = torch.load("./weights/mobilenetV1X0.25_pretrain.tar", map_location=torch.device('cpu'))
-                from collections import OrderedDict
-                new_state_dict = OrderedDict()
-                for k, v in checkpoint['state_dict'].items():
-                    name = k[7:]  # remove module.
-                    new_state_dict[name] = v
-                # load params
+                #checkpoint = torch.load("mobilenetv3_small_67.4.pth", map_location=torch.device('cpu'))
+                #from collections import OrderedDict
+                #new_state_dict = OrderedDict()
+                #for k, v in checkpoint['state_dict'].items():
+                #    name = k[7:]  # remove module.
+                #    new_state_dict[name] = v
+                ## load params
+                #backbone.load_state_dict(new_state_dict)
+            
+                state_dict = torch.load("mobilenetv3_small_67.4.pth")
                 backbone.load_state_dict(new_state_dict)
-        elif cfg['name'] == 'Resnet50':
-            import torchvision.models as models
-            backbone = models.resnet50(pretrained=cfg['pretrain'])
 
-        self.body = _utils.IntermediateLayerGetter(backbone, cfg['return_layers'])
-        in_channels_stage2 = cfg['in_channel']
+            
+        #self.body = _utils.IntermediateLayerGetter(backbone, cfg['return_layers'])
+        self.body = backbone
+        #in_channels_stage2 = cfg['in_channel']
         in_channels_list = [
-            in_channels_stage2 * 2,
-            in_channels_stage2 * 4,
-            in_channels_stage2 * 8,
+            16,
+            32,
+            64,
         ]
         out_channels = cfg['out_channel']
         self.fpn = FPN(in_channels_list,out_channels)
@@ -114,14 +118,18 @@ class RetinaFace(nn.Module):
         feature1 = self.ssh1(fpn[0])
         feature2 = self.ssh2(fpn[1])
         feature3 = self.ssh3(fpn[2])
+        #feature1 = self.ssh1(F.interpolate(fpn[0], size=[out[3].size(2), out[3].size(3)], mode="nearest"))
+        #feature2 = self.ssh2(F.interpolate(fpn[1], size=[out[0].size(2), out[0].size(3)], mode="nearest"))
+        #feature3 = self.ssh3(F.interpolate(fpn[2], size=[out[1].size(2), out[1].size(3)], mode="nearest"))
         features = [feature1, feature2, feature3]
 
         bbox_regressions = torch.cat([self.BboxHead[i](feature) for i, feature in enumerate(features)], dim=1)
         classifications = torch.cat([self.ClassHead[i](feature) for i, feature in enumerate(features)],dim=1)
         ldm_regressions = torch.cat([self.LandmarkHead[i](feature) for i, feature in enumerate(features)], dim=1)
 
-        if self.phase == 'train':
+        '''if self.phase == 'train':
             output = (bbox_regressions, classifications, ldm_regressions)
         else:
-            output = (bbox_regressions, F.softmax(classifications, dim=-1), ldm_regressions)
+            output = (bbox_regressions, F.softmax(classifications, dim=-1), ldm_regressions)'''
+        output = (bbox_regressions, classifications, ldm_regressions, F.softmax(classifications, dim=-1))
         return output
