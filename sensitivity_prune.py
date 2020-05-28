@@ -94,7 +94,7 @@ parser.add_argument('--lr_decay', type=float,
                     default=0.5, help='lr_decay rate')
 
 args = parser.parse_args()
-
+args.save_folder = './widerface_evaluate/widerface_%.2f_%.2f/' %(args.target_ratio, args.ratio_step)
 
 def check_keys(model, pretrained_state_dict):
     ckpt_keys = set(pretrained_state_dict.keys())
@@ -137,8 +137,8 @@ def load_model(model, pretrained_path, load_to_cpu):
 
 def val(net):
     # remove the last evaluation result
-    if os.path.exists('./widerface_evaluate/widerface_txt'):
-        shutil.rmtree('./widerface_evaluate/widerface_txt')
+    if os.path.exists(args.save_folder):
+        shutil.rmtree(args.save_folder)
     # testing dataset
     net.eval()
     testset_folder = args.dataset_folder
@@ -280,7 +280,7 @@ def val(net):
                     os.makedirs("./results/")
                 name = "./results/" + str(i) + ".jpg"
                 cv2.imwrite(name, img_raw)
-    acc = evaluation('./widerface_evaluate/widerface_txt',
+    acc = evaluation(args.save_folder,
                      './widerface_evaluate/ground_truth/')
     print(acc)
     return sum(acc)/3.0
@@ -404,7 +404,7 @@ if __name__ == '__main__':
     net = RetinaFace(cfg=cfg)
     net = load_model(net, args.trained_model, args.cpu)
 
-    print('Finished loading model!')
+    print('Finished loading model!', flush=True)
     # print(net)
     #cudnn.benchmark = True
     device = torch.device("cpu" if args.cpu else "cuda")
