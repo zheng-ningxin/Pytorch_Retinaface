@@ -11,7 +11,7 @@ import torchvision
 val_dir = '/mnt/imagenet/raw_jpeg/2012/val/'
 train_dir = '/mnt/imagenet/raw_jpeg/2012/train/'
 input_size = 224
-batch_size = 64
+batch_size = 256
 num_workers = 24
 epochs = 200
 lr = 1e-1
