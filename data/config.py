@@ -40,3 +40,22 @@ cfg_re50 = {
     'out_channel': 256
 }
 
+cfg_se_mnet = {
+    'name': 'mobilenet0.25_se',
+    'min_sizes': [[16, 32], [64, 128], [256, 512]],
+    'steps': [8, 16, 32],
+    'variance': [0.1, 0.2],
+    'clip': False,
+    'loc_weight': 2.0,
+    'gpu_train': True,
+    'batch_size': 32,
+    'ngpu': 1,
+    'epoch': 250,
+    'decay1': 190,
+    'decay2': 220,
+    'image_size': 640,
+    'pretrain': False,
+    'return_layers': {'se1': 1, 'se2': 2, 'se3': 3},
+    'in_channel': 32,
+    'out_channel': 64
+}

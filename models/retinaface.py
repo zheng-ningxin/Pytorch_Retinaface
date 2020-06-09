@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from collections import OrderedDict
 
 from models.net import MobileNetV1 as MobileNetV1
+from models.net import SEMobileNetV1 as SEMobileNetV1
 from models.net import FPN as FPN
 from models.net import SSH as SSH
 
@@ -68,6 +69,10 @@ class RetinaFace(nn.Module):
         elif cfg['name'] == 'Resnet50':
             import torchvision.models as models
             backbone = models.resnet50(pretrained=cfg['pretrain'])
+        elif cfg['name'] == 'mobilenet0.25_se':
+            backbone = SEMobileNetV1()
+            if cfg['pretrain']:
+                assert False
 
         self.body = _utils.IntermediateLayerGetter(backbone, cfg['return_layers'])
         in_channels_stage2 = cfg['in_channel']

@@ -135,3 +135,62 @@ class MobileNetV1(nn.Module):
         x = self.fc(x)
         return x
 
+class SELayer(nn.Module):
+    def __init__(self, channel, reduction=16):
+        super(SELayer, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Sequential(
+            nn.Linear(channel, channel // reduction, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Linear(channel // reduction, channel, bias=False),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        b, c, _, _ = x.size()
+        y = self.avg_pool(x).view(b, c)
+        y = self.fc(y).view(b, c, 1, 1)
+        return x * y.expand_as(x)
+
+class SEMobileNetV1(nn.Module):
+    def __init__(self):
+        super(SEMobileNetV1, self).__init__()
+        self.stage1 = nn.Sequential(
+            conv_bn(3, 8, 2, leaky = 0.1),    # 3
+            conv_dw(8, 16, 1),   # 7
+            conv_dw(16, 32, 2),  # 11
+            conv_dw(32, 32, 1),  # 19
+            conv_dw(32, 64, 2),  # 27
+            conv_dw(64, 64, 1),  # 43
+        )
+        self.se1 = SELayer(64)
+        self.stage2 = nn.Sequential(
+            conv_dw(64, 128, 2),  # 43 + 16 = 59
+            conv_dw(128, 128, 1), # 59 + 32 = 91
+            conv_dw(128, 128, 1), # 91 + 32 = 123
+            conv_dw(128, 128, 1), # 123 + 32 = 155
+            conv_dw(128, 128, 1), # 155 + 32 = 187
+            conv_dw(128, 128, 1), # 187 + 32 = 219
+        )
+        self.se2 = SELayer(128)
+        self.stage3 = nn.Sequential(
+            conv_dw(128, 256, 2), # 219 +3 2 = 241
+            conv_dw(256, 256, 1), # 241 + 64 = 301
+        )
+        self.se3 = SELayer(256)
+        self.avg = nn.AdaptiveAvgPool2d((1,1))
+        self.fc = nn.Linear(256, 1000)
+
+    def forward(self, x):
+        x = self.stage1(x)
+        x = self.se1(x)
+        x = self.stage2(x)
+        x = self.se2(x)
+        x = self.stage3(x)
+        x = self.se3(x)
+        x = self.avg(x)
+        # x = self.model(x)
+        x = x.view(-1, 256)
+        x = self.fc(x)
+        return x
+
